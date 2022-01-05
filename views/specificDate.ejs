@@ -1,0 +1,73 @@
+<%- include("header") -%>
+
+
+
+  <div class="container">
+  <div class="row">
+    <div class="col">
+      <div class="box" id="heading" >
+        <!-- <h1> <%= listTitle %> </h1> -->
+        <div class="dropdown">
+            <button class="btn  dropdown-toggle  btn-lg" type="button" id="dropdownMenuButton1" data-bs-toggle="dropdown" aria-expanded="false" >
+              <%= listTitle %>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="dropdownMenuButton1">
+            <li ><b><a href="/">Today</a></b></li>
+              <li ><b>Create List for Specific Date</b></li>
+              <form action="/specificDate" method="post">
+                <!-- <label for="birthday">Birthday:</label> -->
+                <input type="date" name="newDate" placeholder="Chosse Date" >
+                <button class="date_button" type="submit" name="newDateList" value="newDate">Create List</button>
+              </form>
+
+            </ul>
+          </div>
+
+      </div>
+
+      <div class="box">
+
+        <% newListItems.forEach(function(e){ %>
+          <form action="/delete" method="post" >
+            <div class="item">
+              <input type="checkbox" name="checkbox" value="<%= e._id %>" onChange="this.form.submit()">
+              <p> <%= e.name  %> </p>
+            </div>
+            <input type="hidden" name="listName" value="<%=listTitle%>"></input>
+          </form>
+
+
+        <%})%>
+
+          <form class="item" action="/" method="post">
+            <input type="text" name="newItem" placeholder="New Item" autocomplete="off">
+            <button class="add" type="submit" name="list" value="<%=listTitle %>">+</button>
+          </form>
+      </div>
+    </div>
+    <div class="col">
+      <div class="box" id="heading">
+        <h1> Completed Tasks </h1>
+      </div>
+
+      <div class="box">
+
+        <% newTaskItems.forEach(function(e){ %>
+
+            <div class="item">
+
+              <p style="text-decoration:line-through"> <%= e.name  %> </p>
+            </div>
+
+
+
+
+        <%})%>
+
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<%- include("footer") -%>
