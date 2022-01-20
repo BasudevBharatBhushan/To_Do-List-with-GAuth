@@ -10,6 +10,10 @@ const date = require(__dirname+"/date.js");
 
 const app = express();
 
+// $ npm i passport passport-local passport-local-mongoose express-session
+const session = require("express-session");  //Level 5
+const passport = require("passport"); //Level 5
+const passportLocalMongoose = require("passport-local-mongoose"); //Level 5
 
 app.set('view engine','ejs');
 app.use(bodyParser.urlencoded({
@@ -27,6 +31,15 @@ mongoose.connect("mongodb://localhost:27017/MytodolistDB2", {
 
 let get_date= date.getDate();
 let today_date = date.getDate();
+
+app.use(session({      //Level 5
+  secret:"Our little secret.",
+  resave:false,
+  saveUninitialized:false
+}));
+app.use(passport.initialize());  //Level 5
+app.use(passport.session());     //Level 5
+
 
 /******************** MONGOOSE SCHEMA ****************/
 const itemsSchema=new mongoose.Schema({         //DB FOR TODOLIST
@@ -66,6 +79,21 @@ const listSchema = {            //DB FOR SPECIFIC DATE LIST
 };
 const List = mongoose.model("List", listSchema);
 
+const userSchema = new mongoose.Schema({ //DB for authentification
+  email: String,
+  password: String
+});
+
+userSchema.plugin(passportLocalMongoose);  //Level 5
+
+
+const User = new mongoose.model("User", userSchema);
+
+passport.use(User.createStrategy());
+
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
+
 const item1 = new Item({
   name: "Welcome to your todolist!"
 });
@@ -79,22 +107,27 @@ const defaultItems = [item1, item2, item3];
 
 /******************** GET REQUESTS ****************/
 
-app.get("/",function(req,res){
-  List.findOne({name:today_date},function(err,foundList){
-    if(!err){
-      if(!foundList){
-        const list = new List({
-          name:today_date,
-          items:defaultItems
-        });
+app.get("/list",function(req,res){
+  if(req.isAuthenticated()){
+    List.findOne({name:today_date},function(err,foundList){
+      if(!err){
+        if(!foundList){
+          const list = new List({
+            name:today_date,
+            items:defaultItems
+          });
 
-        list.save();
-        res.redirect("/");
-      }else{
-        res.render("list",{listTitle:foundList.name,newListItems:foundList.items,newTaskItems:foundList.completedItems});
+          list.save();
+          res.redirect("/");
+        }else{
+          res.render("list",{listTitle:foundList.name,newListItems:foundList.items,newTaskItems:foundList.completedItems});
+        }
       }
-    }
-  })
+    })
+  }else{
+    res.redirect("/login");
+  }
+
 });
 
 app.get('/favicon.ico', (req, res) => {
@@ -116,15 +149,37 @@ app.get("/specificDate",function(req,res){
         }else{
           console.log("List Exists");
           res.render("list",{listTitle:foundList.name , newListItems:foundList.items, newTaskItems: foundList.completedItems})
-          // res.redirect("/")
+        
         }
       }
   })
 });
 
+app.get("/login", function(req, res) {
+  res.render("login");
+});
+
+app.get("/register", function(req, res) {
+  res.render("register");
+});
+
+app.get("/",function(req,res){
+  if(req.isAuthenticated()){
+    res.redirect("/list");
+  }else{
+    res.render("home");
+  }
+});
+
+app.get("/logout", function(req , res){
+  //Method from passport local mongoose package
+  req.logout();
+  res.redirect("/");
+});
+
 /******************** POST REQUESTS ****************/
 
-app.post("/", function(req, res) {
+app.post("/list", function(req, res) {
 
   const itemName = req.body.newItem;
   const listName = req.body.list;
@@ -191,6 +246,38 @@ app.post("/specificDate" , function(req , res){
   get_date=new_date.toLocaleDateString("en-US", options);
   res.redirect("/specificDate");
 })
+
+app.post("/register",function(req , res){
+  //Method from passport local mongoose package
+  User.register({username:req.body.username},req.body.password, function(err , user){
+    if(err){
+      console.log(err);
+      res.redirect("/register")
+    }else{
+      passport.authenticate("local")(req , res , function(){
+        res.redirect("/list");
+      });
+    }
+  })
+});
+
+app.post("/login",function(req , res){
+  const user = new User({
+    username : req.body.username,
+    password : req.body.password
+  });
+
+  //Method from passport local mongoose package
+  req.login(user,function(err){
+    if(err){
+      console.log(err);
+    }else{
+      passport.authenticate("local")(req , res , function(){
+        res.redirect("/list");
+      })
+    }
+  })
+});
 /****************************************************** LISTEN REQUESTS ********************************************************************/
 
 
