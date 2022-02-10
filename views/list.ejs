@@ -29,6 +29,7 @@
 
         <% newListItems.forEach(function(e){ %>
           <form action="/delete" method="post" >
+            <input type ="hidden" name="LoggedInUserID" value ="<%=userID%>"></input>
             <div class="item">
               <input type="checkbox" name="checkbox" value="<%= e._id %>" onChange="this.form.submit()">
               <p> <%= e.name  %> </p>
@@ -40,7 +41,8 @@
 
         <%})%>
 
-          <form class="item" action="/" method="post">
+          <form class="item" action="/list" method="post">
+            <input type ="hidden" name="LoggedInUserID" value ="<%=userID%>"></input>
             <input type="text" name="newItem" placeholder="New Item" autocomplete="off">
             <button class="add" type="submit" name="list" value="<%=listTitle %>">+</button>
           </form>

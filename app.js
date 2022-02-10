@@ -22,7 +22,7 @@ app.use(bodyParser.urlencoded({
 app.use(express.static("public"));
 
 app.traceDeprecation = true;
-mongoose.connect("mongodb://localhost:27017/MytodolistDB2", {
+mongoose.connect("mongodb://localhost:27017/MytodolistDB3", {
   useNewUrlParser: true,
   useUnifiedTopology: true
 });
@@ -67,11 +67,9 @@ const Task = mongoose.model("Task", taskSchema);
 const listSchema = {            //DB FOR SPECIFIC DATE LIST
   name: {
     type: String,
-    unique: true,
-    dropDups: true,
+    // unique: true,
     required: [true, "no task added"],
     index:true,
-    unique:true,
     sparse:true
   },
   items: [itemsSchema],
@@ -81,7 +79,8 @@ const List = mongoose.model("List", listSchema);
 
 const userSchema = new mongoose.Schema({ //DB for authentification
   email: String,
-  password: String
+  password: String,
+  UniqueList:[listSchema]
 });
 
 userSchema.plugin(passportLocalMongoose);  //Level 5
@@ -109,20 +108,28 @@ const defaultItems = [item1, item2, item3];
 
 app.get("/list",function(req,res){
   if(req.isAuthenticated()){
-    List.findOne({name:today_date},function(err,foundList){
-      if(!err){
-        if(!foundList){
-          const list = new List({
-            name:today_date,
-            items:defaultItems
-          });
-
-          list.save();
-          res.redirect("/");
-        }else{
-          res.render("list",{listTitle:foundList.name,newListItems:foundList.items,newTaskItems:foundList.completedItems});
+    let val = false;
+    User.findOne({_id:req.user._id},function(err,foundUser){
+      console.log(foundUser.username);
+      foundUser.UniqueList.some(function(foundList){
+        val = (foundList.name === today_date)
+        if(val==true){
+          // console.log("List Found")
+          res.render("list",{listTitle:foundList.name,newListItems:foundList.items,newTaskItems:foundList.completedItems,userID:req.user._id});
+          return true;
         }
+      })
+      if(val == false){
+        console.log("List Not Found");
+        const list = new List({
+          name:today_date,
+          items:defaultItems
+        });
+        req.user.UniqueList.push(list);
+        req.user.save();
+        res.redirect("/");
       }
+
     })
   }else{
     res.redirect("/login");
@@ -135,24 +142,34 @@ app.get('/favicon.ico', (req, res) => {
 });
 
 app.get("/specificDate",function(req,res){
-  List.findOne({name:get_date},function(err,foundList){
-      if(!err){
-        if(!foundList){
-          console.log("List Doesn't Exist");
-          //Create a new list
-          const list = new List({
-            name:get_date,
-            items:defaultItems
-          });
-          list.save();
-          res.redirect("/specificDate");
-        }else{
-          console.log("List Exists");
-          res.render("list",{listTitle:foundList.name , newListItems:foundList.items, newTaskItems: foundList.completedItems})
-        
+  if(req.isAuthenticated()){
+    let val = false;
+    User.findOne({_id:req.user._id},function(err,foundUser){
+      foundUser.UniqueList.some(function(foundList){
+        val = (foundList.name === get_date);
+        if(val){
+          console.log(foundList.name + " List Exist");
+          res.render("list",{listTitle:foundList.name,newListItems:foundList.items,newTaskItems:foundList.completedItems,userID:req.user._id});
+          return true;
         }
+
+      })
+      if(val == false){
+        console.log(get_date + " List doesn't Exist");
+        const list = new List({
+          name:get_date,
+          items:defaultItems
+        });
+        req.user.UniqueList.push(list);
+        req.user.save();
+        return res.redirect("/specificDate");
       }
-  })
+
+    })
+  }else{
+    res.redirect("/login");
+  }
+
 });
 
 app.get("/login", function(req, res) {
@@ -183,56 +200,67 @@ app.post("/list", function(req, res) {
 
   const itemName = req.body.newItem;
   const listName = req.body.list;
+  const userID = req.body.LoggedInUserID;
+
 
   console.log(itemName +" added in ["+ listName+"]" )
   const item = new Item({
     name: itemName
   });
 
-  List.findOne({name:listName} , function(err , foundList){
-    foundList.items.push(item);
-    foundList.save();
-    if(listName === today_date){
-      res.redirect("/");
-    }else{
-      res.redirect("/specificDate");
-    }
+  User.findOne({_id:userID},function(err,foundUser){
+    foundUser.UniqueList.forEach(function(foundList){
+      if(foundList.name===listName){
+        foundList.items.push(item);
+        foundUser.save();
+        if(listName === today_date){
+           res.redirect("/");
+        }else{
+           res.redirect("/specificDate");
+        }
+      }
+    })
   })
+
 
 });
 
 app.post("/delete", function(req, res) {
   const checkItemId = req.body.checkbox;
   const listName = req.body.listName;
+  const userID = req.body.LoggedInUserID;
 
+  User.findOne({_id:userID},function(err,foundUser){
+    foundUser.UniqueList.forEach(function(foundList){
+      if(foundList.name === listName){
+        foundList.items.filter((e,i)=>{
+          if(e._id == checkItemId){
+            if(e.name == "Welcome to your todolist!" || e.name == "Hit the + button to add a new item" || e.name == "⬅ Hit this to delete an item." ){
+              console.log("cannot be deleted")
+            }else{
+              const CTask = new Task({
+                name:e.name
+              })
+              foundList.completedItems.push(CTask);
+              foundUser.save();
 
-     List.findOne({name:listName},function(err, foundList){
-
-       foundList.items.filter((e,i)=>{
-         if(e._id == checkItemId){
-           if(e.name == "Welcome to your todolist!" || e.name == "Hit the + button to add a new item" || e.name == "⬅ Hit this to delete an item." ){
-             console.log("cannot be deleted");
-           }else{
-             const CTask = new Task({
-               name:e.name
-             })
-             foundList.completedItems.push(CTask);
-             foundList.save();
-
-             const newList = foundList.items.filter((e)=>{
-               return e._id != checkItemId;
-             })
-             foundList.items = newList;
-             console.log(e.name+ " deleted from the list ["+listName+"]")
-           }
-         }
-      })
-      if(listName==today_date){
-            res.redirect("/");
-          }else{
-            res.redirect("/specificDate")
+              const newList = foundList.items.filter(e=>{
+                return e._id != checkItemId;
+              })
+              foundList.items = newList;
+              console.log(e.name+ " deleted from the list ["+listName+"]")
+            }
           }
-     })
+        })
+      }
+    })
+    if(listName==today_date){
+      res.redirect("/");
+    }else{
+      res.redirect("/specificDate")
+    }
+  })
+
 });
 
 app.post("/specificDate" , function(req , res){
@@ -240,9 +268,10 @@ app.post("/specificDate" , function(req , res){
   const options = {
     weekday: "long",
     day: "numeric",
-    month: "long"
+    month: "long",
+    year:"numeric"
   };
-  console.log(new_date.toLocaleDateString("en-US", options));
+  // console.log(new_date.toLocaleDateString("en-US", options));
   get_date=new_date.toLocaleDateString("en-US", options);
   res.redirect("/specificDate");
 })
