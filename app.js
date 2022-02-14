@@ -1,6 +1,7 @@
 //jshint esvesion:6
 /*VESRION-1 - WEBSITE WITH LOCALY HOST DATABASE*/
 /********************REQUIRE REQUESTS****************/
+require("dotenv").config();                //npm i dotenv
 const express = require("express");
 const bodyParser=require("body-parser");
 const ejs = require("ejs");
@@ -14,6 +15,8 @@ const app = express();
 const session = require("express-session");  //Level 5
 const passport = require("passport"); //Level 5
 const passportLocalMongoose = require("passport-local-mongoose"); //Level 5
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require('mongoose-find-or-create'); //level-6
 
 app.set('view engine','ejs');
 app.use(bodyParser.urlencoded({
@@ -80,18 +83,40 @@ const List = mongoose.model("List", listSchema);
 const userSchema = new mongoose.Schema({ //DB for authentification
   email: String,
   password: String,
+  username: String, //Level - 6 Google Auth
   UniqueList:[listSchema]
 });
 
 userSchema.plugin(passportLocalMongoose);  //Level 5
+userSchema.plugin(findOrCreate); //Level 6   method of mongoose-find-or-create
 
 
 const User = new mongoose.model("User", userSchema);
 
 passport.use(User.createStrategy());
 
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+passport.serializeUser(function(user, done) { //method from passport package which will work with anykind of authentication  Level-6
+  done(null, user.id);
+});
+passport.deserializeUser(function(id, done) {  //level-6
+  User.findById(id, function(err, user) {
+    done(err, user);
+  });
+});
+
+passport.use(new GoogleStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/SmartToDoList",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    // console.log(profile);
+    User.findOrCreate({ username: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
 
 const item1 = new Item({
   name: "Welcome to your todolist!"
@@ -194,6 +219,21 @@ app.get("/logout", function(req , res){
   res.redirect("/");
 });
 
+app.get("/auth/google", //level 6
+  passport.authenticate("google", {
+    scope: ["profile"]
+  })
+);
+
+app.get("/auth/google/SmartToDoList", //level 6   //google redirect to this page
+  passport.authenticate("google", {
+    failureRedirect: "/login"
+  }),
+  function(req, res) {
+    // Successful authentication, redirect to list
+    // res.send("Authenticated By Google")
+    res.redirect("/list")
+  });
 /******************** POST REQUESTS ****************/
 
 app.post("/list", function(req, res) {
@@ -233,7 +273,7 @@ app.post("/delete", function(req, res) {
   User.findOne({_id:userID},function(err,foundUser){
     foundUser.UniqueList.forEach(function(foundList){
       if(foundList.name === listName){
-        foundList.items.filter((e,i)=>{
+        foundList.items.forEach((e,i)=>{
           if(e._id == checkItemId){
             if(e.name == "Welcome to your todolist!" || e.name == "Hit the + button to add a new item" || e.name == "⬅ Hit this to delete an item." ){
               console.log("cannot be deleted")
@@ -262,6 +302,31 @@ app.post("/delete", function(req, res) {
   })
 
 });
+
+app.post("/refresh",function(req,res){
+  const itemArray = req.body.refreshButton;
+  const listName = req.body.listName;
+  const userID = req.body.LoggedInUserID;
+  function UndeletedItems(x){
+    if(x.name == "Welcome to your todolist!" || x.name == "Hit the + button to add a new item" || x.name == "⬅ Hit this to delete an item.")
+      return true;
+    return false;
+  }
+  User.findOne({_id:userID},function(err,foundUser){
+    foundUser.UniqueList.forEach(function(foundList){
+      const newList = foundList.items.filter(UndeletedItems)
+      foundList.items = newList;
+      foundList.completedItems = [];
+    })
+    foundUser.save();
+  })
+  if(listName==today_date){
+      res.redirect("/");
+    }else{
+      res.redirect("/specificDate")
+    }
+
+})
 
 app.post("/specificDate" , function(req , res){
   const new_date = new Date(req.body.newDate);

@@ -1,0 +1,7 @@
+SmartToDoList
+
+Google OAuth
+
+Client Id - 1018399134636-pbks65oatif55vnnp7n5uld4iu718iq7.apps.googleusercontent.com
+
+Client Secret - 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
