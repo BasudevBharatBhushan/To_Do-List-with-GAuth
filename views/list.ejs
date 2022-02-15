@@ -74,9 +74,9 @@
   <form action="refresh" method="post">
       <input type ="hidden" name="LoggedInUserID" value ="<%=userID%>"></input>
       <input type="hidden" name="listName" value="<%=listTitle%>"></input>
-    <button type="submit" name="refreshButton" value="<%=newListItems%>" class="btn-link">Refresh List</button>
+    <button class="btn btn-danger btn-lg" type="submit" name="refreshButton" value="<%=newListItems%>">Refresh List</button>
 </form>
-  <h4><a href="/logout">Logout</a></h4>
+  <h4><b><a class="link-success" href="/logout">Logout</a></b></h4>
 </div>
 
 <%- include("footer") -%>
